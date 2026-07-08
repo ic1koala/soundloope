@@ -1,0 +1,1030 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>LOOPER</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #08080E;
+    --surface: #12121C;
+    --surface2: #1C1C2E;
+    --border: #2A2A40;
+    --rec: #E63946;
+    --rec-glow: rgba(230,57,70,0.4);
+    --play: #06D6A0;
+    --play-glow: rgba(6,214,160,0.35);
+    --accent: #FFD60A;
+    --accent-glow: rgba(255,214,10,0.35);
+    --muted: #4A4A6A;
+    --text: #E8E8F0;
+    --text-dim: #8080A0;
+    --pause: #F4A261;
+    --pause-glow: rgba(244,162,97,0.35);
+    --clear: #6B7FD7;
+    --clear-glow: rgba(107,127,215,0.3);
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif;
+    overflow: hidden;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  /* ── START SCREEN ── */
+  #start-screen {
+    position: fixed; inset: 0; z-index: 100;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    background: var(--bg);
+    gap: 32px;
+  }
+  .start-logo {
+    font-size: 56px; font-weight: 800;
+    letter-spacing: 12px;
+    background: linear-gradient(135deg, var(--accent) 0%, var(--rec) 60%, #9B5DE5 100%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: pulse-logo 2s ease-in-out infinite;
+  }
+  @keyframes pulse-logo {
+    0%,100% { opacity: 1; } 50% { opacity: 0.7; }
+  }
+  .start-subtitle {
+    color: var(--text-dim); font-size: 14px; letter-spacing: 3px;
+    text-transform: uppercase;
+  }
+  .waveform-preview {
+    display: flex; align-items: center; gap: 4px; height: 48px;
+  }
+  .waveform-preview span {
+    width: 4px; border-radius: 2px;
+    background: linear-gradient(to top, var(--rec), var(--accent));
+    animation: wave-idle var(--d, 0.8s) ease-in-out infinite alternate;
+  }
+  @keyframes wave-idle {
+    from { height: 8px; opacity: 0.3; }
+    to { height: var(--h, 32px); opacity: 0.9; }
+  }
+  #start-btn {
+    margin-top: 16px;
+    width: 180px; height: 72px;
+    border-radius: 36px; border: none;
+    background: linear-gradient(135deg, var(--rec) 0%, #9B5DE5 100%);
+    color: #fff; font-size: 20px; font-weight: 700;
+    letter-spacing: 4px; cursor: pointer;
+    box-shadow: 0 0 30px var(--rec-glow), 0 0 60px rgba(155,93,229,0.2);
+    transition: transform 0.1s, box-shadow 0.1s;
+  }
+  #start-btn:active { transform: scale(0.95); box-shadow: none; }
+  .start-note {
+    color: var(--text-dim); font-size: 12px; text-align: center;
+    line-height: 1.6; max-width: 280px;
+  }
+
+  /* ── MAIN APP ── */
+  #app {
+    display: none;
+    flex-direction: column;
+    height: 100dvh;
+    padding: env(safe-area-inset-top, 16px) 0 env(safe-area-inset-bottom, 16px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* ── HEADER ── */
+  .header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 20px 4px;
+    flex-shrink: 0;
+  }
+  .app-title {
+    font-size: 22px; font-weight: 800; letter-spacing: 6px;
+    background: linear-gradient(135deg, var(--accent), var(--rec));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .status-pill {
+    font-size: 11px; font-weight: 600; letter-spacing: 1px;
+    padding: 4px 12px; border-radius: 20px;
+    background: var(--surface2); color: var(--text-dim);
+    transition: all 0.3s;
+  }
+  .status-pill.armed   { background: rgba(230,57,70,0.15); color: var(--rec); }
+  .status-pill.playing { background: rgba(6,214,160,0.15); color: var(--play); }
+
+  /* ── METRONOME ── */
+  .metro-card {
+    margin: 8px 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    padding: 14px 18px;
+    flex-shrink: 0;
+  }
+  .metro-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 10px;
+  }
+  .metro-label {
+    font-size: 11px; font-weight: 700; letter-spacing: 2px;
+    color: var(--text-dim); text-transform: uppercase;
+  }
+  .metro-toggle {
+    width: 48px; height: 26px; border-radius: 13px;
+    background: var(--border); border: none; cursor: pointer;
+    position: relative; transition: background 0.3s;
+    flex-shrink: 0;
+  }
+  .metro-toggle::after {
+    content: ''; position: absolute;
+    top: 3px; left: 3px;
+    width: 20px; height: 20px; border-radius: 50%;
+    background: #fff; transition: transform 0.3s;
+  }
+  .metro-toggle.on { background: var(--accent); }
+  .metro-toggle.on::after { transform: translateX(22px); }
+
+  .metro-body { display: flex; align-items: center; gap: 14px; }
+  .bpm-display {
+    font-size: 36px; font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    color: var(--accent);
+    min-width: 70px; text-align: center;
+    font-family: 'SF Mono', 'Courier New', monospace;
+  }
+  .bpm-controls { display: flex; flex-direction: column; gap: 6px; }
+  .bpm-btn {
+    width: 42px; height: 32px; border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface2); color: var(--text);
+    font-size: 18px; font-weight: 700; cursor: pointer;
+    transition: background 0.15s, transform 0.1s;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .bpm-btn:active { background: var(--border); transform: scale(0.92); }
+
+  .beat-dots {
+    display: flex; gap: 10px; flex: 1; justify-content: center; align-items: center;
+  }
+  .beat-dot {
+    width: 14px; height: 14px; border-radius: 50%;
+    background: var(--border); transition: all 0.05s;
+  }
+  .beat-dot.active {
+    background: var(--accent);
+    box-shadow: 0 0 10px var(--accent-glow), 0 0 20px var(--accent-glow);
+    transform: scale(1.3);
+  }
+  .beat-dot.beat1.active {
+    background: var(--rec);
+    box-shadow: 0 0 10px var(--rec-glow), 0 0 20px var(--rec-glow);
+  }
+
+  /* ── LOOP TIMER ── */
+  .loop-timer {
+    text-align: center; padding: 4px 0 2px;
+    font-family: 'SF Mono', 'Courier New', monospace;
+    font-size: 13px; color: var(--text-dim); letter-spacing: 2px;
+    flex-shrink: 0;
+  }
+  .loop-timer span { color: var(--play); }
+
+  /* ── TRACKS ── */
+  .tracks-container {
+    flex: 1; display: flex; flex-direction: column;
+    gap: 10px; padding: 4px 16px 12px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .track-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 14px 16px;
+    transition: border-color 0.3s, box-shadow 0.3s;
+    flex-shrink: 0;
+  }
+  .track-card.recording {
+    border-color: var(--rec);
+    box-shadow: 0 0 20px var(--rec-glow), inset 0 0 20px rgba(230,57,70,0.05);
+    animation: rec-pulse 1s ease-in-out infinite;
+  }
+  .track-card.playing {
+    border-color: var(--play);
+    box-shadow: 0 0 16px var(--play-glow);
+  }
+  .track-card.has-audio {
+    border-color: var(--border);
+  }
+  @keyframes rec-pulse {
+    0%,100% { box-shadow: 0 0 20px var(--rec-glow); }
+    50%      { box-shadow: 0 0 40px var(--rec-glow), 0 0 60px rgba(230,57,70,0.2); }
+  }
+
+  .track-top {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 10px;
+  }
+  .track-number {
+    font-size: 11px; font-weight: 700; letter-spacing: 1px;
+    color: var(--text-dim); text-transform: uppercase;
+    min-width: 60px;
+  }
+  .track-waveform {
+    flex: 1; height: 32px;
+    background: var(--surface2); border-radius: 8px;
+    position: relative; overflow: hidden;
+  }
+  .track-waveform canvas {
+    width: 100%; height: 100%; display: block;
+  }
+  /* progress bar overlay */
+  .track-progress {
+    position: absolute; top: 0; left: 0; bottom: 0;
+    background: rgba(6,214,160,0.12);
+    width: 0%; transition: none;
+    pointer-events: none;
+  }
+  .track-duration {
+    font-size: 11px; font-family: 'SF Mono', monospace;
+    color: var(--text-dim); min-width: 38px; text-align: right;
+  }
+
+  /* ── TRACK BUTTONS ── */
+  .track-buttons {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
+  }
+  .t-btn {
+    height: 52px; border-radius: 14px; border: none;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.5px;
+    cursor: pointer; transition: transform 0.1s, box-shadow 0.15s, opacity 0.2s;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 3px;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .t-btn:active { transform: scale(0.93); }
+  .t-btn:disabled { opacity: 0.3; pointer-events: none; }
+  .t-btn .icon { font-size: 18px; line-height: 1; }
+
+  .btn-rec {
+    background: linear-gradient(145deg, #2A0A0C, #1A0608);
+    border: 1.5px solid var(--rec);
+    color: var(--rec);
+  }
+  .btn-rec.active {
+    background: var(--rec);
+    color: #fff;
+    box-shadow: 0 0 20px var(--rec-glow);
+  }
+  .btn-play {
+    background: linear-gradient(145deg, #021A14, #010E0A);
+    border: 1.5px solid var(--play);
+    color: var(--play);
+  }
+  .btn-play.active {
+    background: var(--play);
+    color: #000;
+    box-shadow: 0 0 18px var(--play-glow);
+  }
+  .btn-pause {
+    background: linear-gradient(145deg, #1E1000, #150C00);
+    border: 1.5px solid var(--pause);
+    color: var(--pause);
+  }
+  .btn-pause.active {
+    background: var(--pause);
+    color: #000;
+    box-shadow: 0 0 18px var(--pause-glow);
+  }
+  .btn-clear {
+    background: linear-gradient(145deg, #0D0E20, #080910);
+    border: 1.5px solid var(--clear);
+    color: var(--clear);
+  }
+  .btn-clear:active:not(:disabled) {
+    background: var(--clear);
+    color: #fff;
+    box-shadow: 0 0 18px var(--clear-glow);
+  }
+
+  /* ── MASTER CONTROLS ── */
+  .master-bar {
+    padding: 8px 16px 4px;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+    flex-shrink: 0;
+  }
+  .master-btn {
+    height: 56px; border-radius: 16px; border: none;
+    font-size: 14px; font-weight: 700; letter-spacing: 1px;
+    cursor: pointer; transition: transform 0.1s, box-shadow 0.15s;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+  }
+  .master-btn:active { transform: scale(0.96); }
+  .master-stop {
+    background: linear-gradient(135deg, #1A0608, #2A0A0C);
+    border: 1.5px solid var(--rec);
+    color: var(--rec);
+  }
+  .master-stop.active {
+    background: var(--rec); color: #fff;
+    box-shadow: 0 0 24px var(--rec-glow);
+  }
+  .master-clear-all {
+    background: var(--surface2);
+    border: 1.5px solid var(--border);
+    color: var(--text-dim);
+  }
+  .master-clear-all:active { background: var(--border); }
+
+  /* ── TOAST ── */
+  .toast {
+    position: fixed; bottom: calc(env(safe-area-inset-bottom, 16px) + 80px);
+    left: 50%; transform: translateX(-50%) translateY(20px);
+    background: var(--surface2); border: 1px solid var(--border);
+    color: var(--text); font-size: 13px; font-weight: 600;
+    padding: 10px 20px; border-radius: 20px;
+    opacity: 0; transition: all 0.3s; pointer-events: none;
+    white-space: nowrap; z-index: 50;
+  }
+  .toast.show {
+    opacity: 1; transform: translateX(-50%) translateY(0);
+  }
+
+  /* Scrollbar hide */
+  ::-webkit-scrollbar { display: none; }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════ START SCREEN ═══════════════ -->
+<div id="start-screen">
+  <div class="start-logo">LOOPER</div>
+  <div class="start-subtitle">Multi-track · iOS</div>
+  <div class="waveform-preview" id="wave-preview"></div>
+  <button id="start-btn">START</button>
+  <p class="start-note">マイクの使用許可が必要です。<br>STARTをタップしてアプリを起動してください。</p>
+</div>
+
+<!-- ═══════════════ MAIN APP ═══════════════ -->
+<div id="app">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="app-title">LOOPER</div>
+    <div class="status-pill" id="global-status">READY</div>
+  </div>
+
+  <!-- METRONOME -->
+  <div class="metro-card">
+    <div class="metro-header">
+      <span class="metro-label">Metronome</span>
+      <button class="metro-toggle" id="metro-toggle" aria-label="メトロノームON/OFF"></button>
+    </div>
+    <div class="metro-body">
+      <div class="bpm-controls">
+        <button class="bpm-btn" id="bpm-up">＋</button>
+        <button class="bpm-btn" id="bpm-dn">－</button>
+      </div>
+      <div class="bpm-display" id="bpm-display">120</div>
+      <div class="beat-dots" id="beat-dots"></div>
+    </div>
+  </div>
+
+  <!-- LOOP TIMER -->
+  <div class="loop-timer" id="loop-timer">LOOP: <span>--:--:---</span></div>
+
+  <!-- TRACKS -->
+  <div class="tracks-container" id="tracks-container"></div>
+
+  <!-- MASTER CONTROLS -->
+  <div class="master-bar">
+    <button class="master-btn master-stop" id="master-stop">⏹ ALL STOP</button>
+    <button class="master-btn master-clear-all" id="master-clear">🗑 CLEAR ALL</button>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+
+// ─── CONFIG ───────────────────────────────────────────
+const NUM_TRACKS = 4;
+const BEATS_PER_BAR = 4;
+
+// ─── STATE ────────────────────────────────────────────
+let audioCtx = null;
+let micStream = null;
+let loopLength = 0;       // seconds (set by first track)
+let isLooping  = false;
+let loopStart  = 0;       // audioCtx.currentTime when loop began
+let loopRAF    = null;
+
+// Metronome
+let metroBPM       = 120;
+let metroOn        = false;
+let metroWorker    = null;
+let metroNextBeat  = 0;
+let metroBeatIndex = 0;
+let clickBuffer    = null;
+let accentBuffer   = null;
+
+// Tracks
+const tracks = [];
+
+// ─── DOM REFS ─────────────────────────────────────────
+const startScreen  = document.getElementById('start-screen');
+const appEl        = document.getElementById('app');
+const startBtn     = document.getElementById('start-btn');
+const globalStatus = document.getElementById('global-status');
+const bpmDisplay   = document.getElementById('bpm-display');
+const beatDotsEl   = document.getElementById('beat-dots');
+const metroToggle  = document.getElementById('metro-toggle');
+const loopTimerEl  = document.getElementById('loop-timer');
+const tracksEl     = document.getElementById('tracks-container');
+const masterStop   = document.getElementById('master-stop');
+const masterClear  = document.getElementById('master-clear');
+const toastEl      = document.getElementById('toast');
+
+// ─── WAVEFORM PREVIEW ANIMATION ───────────────────────
+(function buildPreview() {
+  const c = document.getElementById('wave-preview');
+  const heights = [12,24,38,48,32,44,36,20,42,28,18,40,30,16,46];
+  const delays  = [0,.1,.2,.15,.25,.05,.3,.18,.08,.22,.12,.28,.06,.19,.35];
+  heights.forEach((h,i) => {
+    const s = document.createElement('span');
+    s.style.setProperty('--h', h+'px');
+    s.style.setProperty('--d', (0.6 + delays[i]*1.2)+'s');
+    s.style.animationDelay = delays[i]+'s';
+    c.appendChild(s);
+  });
+})();
+
+// ─── BEAT DOTS ────────────────────────────────────────
+function buildBeatDots() {
+  beatDotsEl.innerHTML = '';
+  for (let i = 0; i < BEATS_PER_BAR; i++) {
+    const d = document.createElement('div');
+    d.className = 'beat-dot' + (i === 0 ? ' beat1' : '');
+    d.id = 'dot-' + i;
+    beatDotsEl.appendChild(d);
+  }
+}
+buildBeatDots();
+
+// ─── TOAST ────────────────────────────────────────────
+let toastTimer = null;
+function showToast(msg) {
+  toastEl.textContent = msg;
+  toastEl.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toastEl.classList.remove('show'), 2200);
+}
+
+// ─── AUDIO CONTEXT INIT ───────────────────────────────
+async function initAudio() {
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)({
+    sampleRate: 44100,
+    latencyHint: 'interactive'
+  });
+  // iOS resume
+  if (audioCtx.state === 'suspended') await audioCtx.resume();
+
+  // Mic access
+  micStream = await navigator.mediaDevices.getUserMedia({
+    audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+  });
+
+  // Click buffers
+  clickBuffer  = makeClickBuffer(false);
+  accentBuffer = makeClickBuffer(true);
+}
+
+function makeClickBuffer(accent) {
+  const sr = audioCtx.sampleRate;
+  const len = Math.floor(sr * 0.04);
+  const buf = audioCtx.createBuffer(1, len, sr);
+  const d   = buf.getChannelData(0);
+  const freq = accent ? 1200 : 800;
+  for (let i = 0; i < len; i++) {
+    d[i] = Math.sin(2 * Math.PI * freq * i / sr) * Math.exp(-i / (len * 0.15));
+  }
+  return buf;
+}
+
+// ─── METRONOME (Web Audio scheduler) ─────────────────
+const METRO_AHEAD = 0.1;  // schedule 100ms ahead
+const METRO_INTERVAL = 25; // ms
+
+let metroTimer = null;
+
+function metroSchedule() {
+  while (metroNextBeat < audioCtx.currentTime + METRO_AHEAD) {
+    // flash dot
+    const bi = metroBeatIndex % BEATS_PER_BAR;
+    schedFlash(bi, metroNextBeat);
+
+    // play click
+    const buf = (bi === 0) ? accentBuffer : clickBuffer;
+    const src = audioCtx.createBufferSource();
+    src.buffer = buf;
+    const gain = audioCtx.createGain();
+    gain.gain.value = bi === 0 ? 0.9 : 0.55;
+    src.connect(gain); gain.connect(audioCtx.destination);
+    src.start(metroNextBeat);
+
+    const secPerBeat = 60 / metroBPM;
+    metroNextBeat += secPerBeat;
+    metroBeatIndex++;
+  }
+}
+
+function schedFlash(dotIdx, when) {
+  const delay = Math.max(0, (when - audioCtx.currentTime) * 1000);
+  setTimeout(() => {
+    document.querySelectorAll('.beat-dot').forEach(d => d.classList.remove('active'));
+    const dot = document.getElementById('dot-' + dotIdx);
+    if (dot) { dot.classList.add('active'); setTimeout(() => dot.classList.remove('active'), 150); }
+  }, delay);
+}
+
+function startMetro() {
+  metroNextBeat  = audioCtx.currentTime + 0.05;
+  metroBeatIndex = 0;
+  metroTimer = setInterval(metroSchedule, METRO_INTERVAL);
+}
+function stopMetro() {
+  clearInterval(metroTimer);
+  document.querySelectorAll('.beat-dot').forEach(d => d.classList.remove('active'));
+}
+
+// ─── TRACK BUILDER ────────────────────────────────────
+function createTrack(index) {
+  const track = {
+    index,
+    state: 'empty',   // empty | recording | has-audio | playing | paused
+    audioBuffer: null,
+    recorder: null,
+    chunks: [],
+    source: null,     // AudioBufferSourceNode for playback
+    playStartTime: 0,
+    playOffset: 0,
+    analyser: null,
+    drawRaf: null,
+    el: null,
+    canvas: null,
+    ctx2d: null,
+    progressEl: null,
+    btnRec: null,
+    btnPlay: null,
+    btnPause: null,
+    btnClear: null,
+    durEl: null,
+  };
+
+  // DOM
+  const card = document.createElement('div');
+  card.className = 'track-card';
+  card.id = 'track-' + index;
+
+  card.innerHTML = `
+    <div class="track-top">
+      <div class="track-number">Track ${index + 1}</div>
+      <div class="track-waveform">
+        <canvas></canvas>
+        <div class="track-progress"></div>
+      </div>
+      <div class="track-duration">--:--</div>
+    </div>
+    <div class="track-buttons">
+      <button class="t-btn btn-rec">
+        <span class="icon">⏺</span><span>${index === 0 ? 'REC' : 'OVERDUB'}</span>
+      </button>
+      <button class="t-btn btn-play" disabled>
+        <span class="icon">▶</span><span>PLAY</span>
+      </button>
+      <button class="t-btn btn-pause" disabled>
+        <span class="icon">⏸</span><span>PAUSE</span>
+      </button>
+      <button class="t-btn btn-clear" disabled>
+        <span class="icon">✕</span><span>CLEAR</span>
+      </button>
+    </div>`;
+
+  tracksEl.appendChild(card);
+
+  track.el       = card;
+  track.canvas   = card.querySelector('canvas');
+  track.ctx2d    = track.canvas.getContext('2d');
+  track.progressEl = card.querySelector('.track-progress');
+  track.durEl    = card.querySelector('.track-duration');
+  track.btnRec   = card.querySelector('.btn-rec');
+  track.btnPlay  = card.querySelector('.btn-play');
+  track.btnPause = card.querySelector('.btn-pause');
+  track.btnClear = card.querySelector('.btn-clear');
+
+  // Resize canvas
+  const resizeCanvas = () => {
+    const r = track.canvas.parentElement.getBoundingClientRect();
+    track.canvas.width  = r.width  * window.devicePixelRatio;
+    track.canvas.height = r.height * window.devicePixelRatio;
+    drawStaticWaveform(track);
+  };
+  resizeCanvas();
+  new ResizeObserver(resizeCanvas).observe(track.canvas.parentElement);
+
+  // Button events
+  track.btnRec.addEventListener('click',   () => handleRec(track));
+  track.btnPlay.addEventListener('click',  () => handlePlay(track));
+  track.btnPause.addEventListener('click', () => handlePause(track));
+  track.btnClear.addEventListener('click', () => handleClear(track));
+
+  return track;
+}
+
+// ─── TRACK BUTTON HANDLERS ────────────────────────────
+function handleRec(track) {
+  if (track.state === 'recording') {
+    stopRecording(track);
+  } else {
+    // Stop other recordings
+    tracks.forEach(t => { if (t.state === 'recording') stopRecording(t); });
+    startRecording(track);
+  }
+}
+
+function handlePlay(track) {
+  if (track.state === 'has-audio' || track.state === 'paused') {
+    startPlayback(track);
+  }
+}
+
+function handlePause(track) {
+  if (track.state === 'playing') {
+    pausePlayback(track);
+  }
+}
+
+function handleClear(track) {
+  stopPlayback(track);
+  track.state       = 'empty';
+  track.audioBuffer = null;
+  track.chunks      = [];
+  track.playOffset  = 0;
+  track.durEl.textContent = '--:--';
+  clearCanvas(track);
+  updateTrackUI(track);
+
+  // If track 0 cleared, reset loop length
+  if (track.index === 0) {
+    loopLength = 0;
+    isLooping  = false;
+    cancelAnimationFrame(loopRAF);
+    updateLoopTimer(null);
+    // stop all
+    tracks.forEach(t => { if (t.state === 'playing') stopPlayback(t); });
+    globalStatus.textContent = 'READY';
+    globalStatus.className   = 'status-pill';
+  }
+}
+
+// ─── RECORDING ────────────────────────────────────────
+function startRecording(track) {
+  if (!micStream) { showToast('マイクが使用できません'); return; }
+
+  // For overdub tracks: need loop length
+  if (track.index > 0 && loopLength === 0) {
+    showToast('先にTrack 1を録音してください');
+    return;
+  }
+
+  const micSrc  = audioCtx.createMediaStreamSource(micStream);
+  track.analyser = audioCtx.createAnalyser();
+  track.analyser.fftSize = 256;
+  micSrc.connect(track.analyser);
+
+  const dest    = audioCtx.createMediaStreamDestination();
+  micSrc.connect(dest);
+
+  track.recorder = new MediaRecorder(dest.stream, { mimeType: bestMime() });
+  track.chunks   = [];
+  track.recorder.ondataavailable = e => { if (e.data.size > 0) track.chunks.push(e.data); };
+  track.recorder.onstop = () => finishRecording(track);
+
+  track.recorder.start(100);
+  track.state = 'recording';
+  track.el.classList.add('recording');
+  track.btnRec.classList.add('active');
+  updateTrackUI(track);
+  drawLiveWaveform(track);
+
+  // Auto-stop at loop length for overdub
+  if (track.index > 0 && loopLength > 0) {
+    track._autoStopTimer = setTimeout(() => {
+      if (track.state === 'recording') stopRecording(track);
+    }, loopLength * 1000 + 80);
+  }
+
+  globalStatus.textContent = 'REC';
+  globalStatus.className   = 'status-pill armed';
+  showToast(track.index === 0 ? '⏺ 録音中...' : '⏺ オーバーダブ中...');
+}
+
+function stopRecording(track) {
+  clearTimeout(track._autoStopTimer);
+  if (track.recorder && track.recorder.state !== 'inactive') {
+    track.recorder.stop();
+  }
+  cancelAnimationFrame(track.drawRaf);
+  track.state = 'empty'; // temp; will be set in finishRecording
+  track.el.classList.remove('recording');
+  track.btnRec.classList.remove('active');
+}
+
+async function finishRecording(track) {
+  const blob = new Blob(track.chunks, { type: bestMime() });
+  const ab   = await blob.arrayBuffer();
+
+  try {
+    const decoded = await audioCtx.decodeAudioData(ab);
+    track.audioBuffer = decoded;
+    track.state       = 'has-audio';
+
+    const dur = decoded.duration;
+    if (track.index === 0 && loopLength === 0) {
+      loopLength = dur;
+      updateLoopTimer(loopLength);
+    }
+
+    track.durEl.textContent = fmtTime(dur);
+    drawStaticWaveform(track);
+    updateTrackUI(track);
+
+    // Auto-play after recording
+    startPlayback(track);
+    showToast('✓ 録音完了');
+  } catch (e) {
+    showToast('デコードエラー。もう一度お試しください。');
+    track.state = 'empty';
+    updateTrackUI(track);
+  }
+
+  globalStatus.textContent = isLooping ? 'PLAYING' : 'READY';
+  globalStatus.className   = 'status-pill' + (isLooping ? ' playing' : '');
+}
+
+// ─── PLAYBACK ─────────────────────────────────────────
+function startPlayback(track) {
+  if (!track.audioBuffer) return;
+  stopPlayback(track); // clear existing source
+
+  const src  = audioCtx.createBufferSource();
+  src.buffer = track.audioBuffer;
+
+  // If loop set, trim/match length
+  if (loopLength > 0) {
+    src.loop      = true;
+    src.loopStart = 0;
+    src.loopEnd   = Math.min(track.audioBuffer.duration, loopLength);
+  } else {
+    src.loop = true;
+  }
+
+  src.connect(audioCtx.destination);
+
+  // Sync to loop phase
+  const offset = loopLength > 0 ? ((audioCtx.currentTime - loopStart) % loopLength + loopLength) % loopLength : 0;
+  src.start(0, offset % (src.loopEnd || track.audioBuffer.duration));
+
+  track.source        = src;
+  track.playStartTime = audioCtx.currentTime - offset;
+  track.state         = 'playing';
+  isLooping           = true;
+  if (loopStart === 0) loopStart = audioCtx.currentTime;
+
+  track.el.classList.add('playing');
+  updateTrackUI(track);
+  startProgressDraw(track);
+
+  globalStatus.textContent = 'PLAYING';
+  globalStatus.className   = 'status-pill playing';
+}
+
+function stopPlayback(track) {
+  if (track.source) {
+    try { track.source.stop(); } catch(e){}
+    track.source = null;
+  }
+  cancelAnimationFrame(track.drawRaf);
+  track.progressEl.style.width = '0%';
+  track.el.classList.remove('playing');
+  if (track.state === 'playing') track.state = 'has-audio';
+}
+
+function pausePlayback(track) {
+  if (track.state !== 'playing') return;
+  track.playOffset = (audioCtx.currentTime - track.playStartTime) % track.audioBuffer.duration;
+  stopPlayback(track);
+  track.state = 'paused';
+  updateTrackUI(track);
+}
+
+// ─── PROGRESS DRAW ────────────────────────────────────
+function startProgressDraw(track) {
+  const draw = () => {
+    if (track.state !== 'playing') return;
+    const elapsed  = audioCtx.currentTime - track.playStartTime;
+    const dur      = loopLength > 0 ? loopLength : track.audioBuffer.duration;
+    const progress = (elapsed % dur) / dur * 100;
+    track.progressEl.style.width = progress + '%';
+    track.drawRaf = requestAnimationFrame(draw);
+  };
+  track.drawRaf = requestAnimationFrame(draw);
+}
+
+// ─── WAVEFORM DRAW ────────────────────────────────────
+function drawStaticWaveform(track) {
+  if (!track.audioBuffer) { clearCanvas(track); return; }
+  const c = track.canvas, ctx = track.ctx2d;
+  const W = c.width, H = c.height;
+  ctx.clearRect(0, 0, W, H);
+
+  const data   = track.audioBuffer.getChannelData(0);
+  const step   = Math.max(1, Math.floor(data.length / W));
+  const mid    = H / 2;
+  const grad   = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0,   'rgba(6,214,160,0.9)');
+  grad.addColorStop(0.5, 'rgba(6,214,160,0.5)');
+  grad.addColorStop(1,   'rgba(6,214,160,0.9)');
+  ctx.fillStyle = grad;
+
+  for (let x = 0; x < W; x++) {
+    let min = 0, max = 0;
+    for (let j = 0; j < step; j++) {
+      const v = data[x * step + j] || 0;
+      if (v < min) min = v; if (v > max) max = v;
+    }
+    const yTop = mid + min * mid;
+    const yBot = mid + max * mid;
+    ctx.fillRect(x, yTop, 1, Math.max(1, yBot - yTop));
+  }
+}
+
+function drawLiveWaveform(track) {
+  if (!track.analyser) return;
+  const c = track.canvas, ctx = track.ctx2d;
+  const W = c.width, H = c.height;
+  const buf = new Uint8Array(track.analyser.frequencyBinCount);
+
+  const draw = () => {
+    if (track.state !== 'recording') return;
+    track.analyser.getByteTimeDomainData(buf);
+    ctx.clearRect(0, 0, W, H);
+    ctx.strokeStyle = `rgba(230,57,70,0.9)`;
+    ctx.lineWidth   = 2 * (window.devicePixelRatio || 1);
+    ctx.beginPath();
+    const sliceW = W / buf.length;
+    for (let i = 0; i < buf.length; i++) {
+      const v = buf[i] / 128.0;
+      const y = v * H / 2;
+      i === 0 ? ctx.moveTo(0, y) : ctx.lineTo(i * sliceW, y);
+    }
+    ctx.stroke();
+    track.drawRaf = requestAnimationFrame(draw);
+  };
+  track.drawRaf = requestAnimationFrame(draw);
+}
+
+function clearCanvas(track) {
+  const c = track.canvas;
+  track.ctx2d.clearRect(0, 0, c.width, c.height);
+  track.progressEl.style.width = '0%';
+}
+
+// ─── TRACK UI STATE ───────────────────────────────────
+function updateTrackUI(track) {
+  const s     = track.state;
+  const hasAu = s !== 'empty';
+  const isRec = s === 'recording';
+  const isPla = s === 'playing';
+  const isPau = s === 'paused';
+
+  track.el.className = 'track-card' + (isRec ? ' recording' : '') + (isPla ? ' playing' : '') + (hasAu ? ' has-audio' : '');
+
+  track.btnRec.disabled  = false;
+  track.btnRec.querySelector('span:last-child').textContent = isRec ? 'STOP' : (track.index === 0 ? 'REC' : 'OVERDUB');
+  track.btnRec.querySelector('.icon').textContent = isRec ? '⏹' : '⏺';
+
+  track.btnPlay.disabled  = !hasAu || isRec || isPla;
+  track.btnPause.disabled = !isPla;
+  track.btnClear.disabled = isRec || !hasAu;
+}
+
+// ─── LOOP TIMER DISPLAY ───────────────────────────────
+function updateLoopTimer(dur) {
+  const span = loopTimerEl.querySelector('span');
+  if (dur === null || dur === 0) { span.textContent = '--:--:---'; return; }
+  const m  = Math.floor(dur / 60);
+  const s  = Math.floor(dur % 60);
+  const ms = Math.floor((dur % 1) * 1000);
+  span.textContent = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}:${String(ms).padStart(3,'0')}`;
+}
+
+function fmtTime(s) {
+  const m = Math.floor(s / 60);
+  const sec = Math.floor(s % 60);
+  return `${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+}
+
+// ─── MIME TYPE ────────────────────────────────────────
+function bestMime() {
+  const types = ['audio/webm;codecs=opus','audio/webm','audio/ogg;codecs=opus','audio/mp4'];
+  for (const t of types) { if (MediaRecorder.isTypeSupported(t)) return t; }
+  return '';
+}
+
+// ─── MASTER CONTROLS ─────────────────────────────────
+masterStop.addEventListener('click', () => {
+  tracks.forEach(t => {
+    if (t.state === 'recording') stopRecording(t);
+    if (t.state === 'playing')   stopPlayback(t);
+    updateTrackUI(t);
+  });
+  isLooping = false;
+  globalStatus.textContent = 'STOPPED';
+  globalStatus.className   = 'status-pill';
+  showToast('⏹ 全トラック停止');
+});
+
+masterClear.addEventListener('click', () => {
+  if (!confirm('全トラックをクリアしますか？')) return;
+  tracks.forEach(t => handleClear(t));
+  loopLength = 0; loopStart = 0; isLooping = false;
+  updateLoopTimer(null);
+  globalStatus.textContent = 'READY';
+  globalStatus.className   = 'status-pill';
+  showToast('🗑 全クリア');
+});
+
+// ─── BPM CONTROLS ────────────────────────────────────
+document.getElementById('bpm-up').addEventListener('click', () => {
+  metroBPM = Math.min(240, metroBPM + 5);
+  bpmDisplay.textContent = metroBPM;
+  if (metroOn) { stopMetro(); startMetro(); }
+});
+document.getElementById('bpm-dn').addEventListener('click', () => {
+  metroBPM = Math.max(40, metroBPM - 5);
+  bpmDisplay.textContent = metroBPM;
+  if (metroOn) { stopMetro(); startMetro(); }
+});
+
+metroToggle.addEventListener('click', () => {
+  metroOn = !metroOn;
+  metroToggle.classList.toggle('on', metroOn);
+  metroOn ? startMetro() : stopMetro();
+  showToast(metroOn ? '🎵 メトロノームON' : '🔇 メトロノームOFF');
+});
+
+// ─── START BUTTON ─────────────────────────────────────
+startBtn.addEventListener('click', async () => {
+  startBtn.textContent = '...';
+  startBtn.disabled    = true;
+  try {
+    await initAudio();
+    startScreen.style.display = 'none';
+    appEl.style.display       = 'flex';
+
+    // Build tracks
+    for (let i = 0; i < NUM_TRACKS; i++) {
+      tracks.push(createTrack(i));
+    }
+    showToast('✓ マイク接続完了');
+  } catch(e) {
+    startBtn.textContent = 'START';
+    startBtn.disabled    = false;
+    const msg = e.name === 'NotAllowedError'
+      ? 'マイクの使用が拒否されました。設定から許可してください。'
+      : `エラー: ${e.message}`;
+    showToast(msg);
+    console.error(e);
+  }
+});
+
+// ─── PREVENT SCROLL BOUNCE ───────────────────────────
+document.body.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
+document.getElementById('tracks-container').addEventListener('touchmove', e => e.stopPropagation(), { passive: true });
+</script>
+</body>
+</html>
